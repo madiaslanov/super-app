@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#1C1C1E"
+    android:padding="16dp">
+
+    <!-- Статус и кнопка сброса -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Подключено"
+            android:textColor="@android:color/white"
+            android:layout_centerVertical="true"
+            android:textSize="18sp" />
+        <Button
+            android:id="@+id/reset_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:text="Сброс"
+            style="?android:attr/borderlessButtonStyle"/>
+    </RelativeLayout>
+
+    <!-- Линии и шторки -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="Красная линия"
+            android:textColor="#FF5252"/>
+        <CheckBox
+            android:id="@+id/red_line_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Показать"
+            android:textColor="@android:color/white"
+            android:checked="true"/>
+    </LinearLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/red_line_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/line_background_red"
+        android:padding="4dp"
+        android:scrollbars="none">
+        <LinearLayout
+            android:id="@+id/redLine"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="40dp"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="Зеленая линия"
+            android:textColor="#69F0AE"/>
+        <CheckBox
+            android:id="@+id/green_line_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Показать"
+            android:textColor="@android:color/white"
+            android:checked="true"/>
+    </LinearLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/green_line_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/line_background_green"
+        android:padding="4dp"
+        android:scrollbars="none">
+        <LinearLayout
+            android:id="@+id/greenLine"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="40dp"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <!-- ИЗМЕНЕНО: Возвращаем поле для ввода -->
+    <TextView
+        android:id="@+id/input_display"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"
+        android:text=""
+        android:textColor="@android:color/white"
+        android:textSize="36sp"
+        android:gravity="end"
+        android:fontFamily="sans-serif-light"/>
+
+    <!-- Клавиатура будет занимать оставшееся место -->
+    <TableLayout
+        android:id="@+id/keypad_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:stretchColumns="*" />
+
+</LinearLayout>

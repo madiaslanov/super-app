@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@drawable/keypad_button_background"
+    android:padding="8dp"
+    android:layout_margin="4dp"
+    android:minWidth="90dp"
+    android:minHeight="90dp">
+
+    <TextView
+        android:id="@+id/keypad_number"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1"
+        android:textColor="@android:color/white"
+        android:textSize="36sp"
+        android:fontFamily="sans-serif-light" />
+
+    <TextView
+        android:id="@+id/keypad_letters"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="АБВГ"
+        android:textColor="#8A8A8E"
+        android:textSize="12sp"
+        android:textAllCaps="true"
+        android:visibility="gone" /> <!-- Скрываем этот элемент -->
+
+</LinearLayout>
