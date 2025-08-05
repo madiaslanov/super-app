@@ -16,8 +16,16 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
-import android.widget.*
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.ListView
+import android.widget.TableLayout
+import android.widget.TableRow
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -40,11 +48,15 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
     private lateinit var greenLineScrollView: HorizontalScrollView
 
     // --- Логика ---
-    private val red = mutableListOf<Int>()
-    private val green = mutableListOf<Int>()
-    private val RED_LINE_CAPACITY = 19
+    private val green = mutableListOf<Int>() // 18 элементов
+    private val red = mutableListOf<Int>()   // 19 элементов
     private val GREEN_LINE_CAPACITY = 18
+    private val RED_LINE_CAPACITY = 19
+    private val TOTAL_NUMBERS = 37
     private val currentInput = StringBuilder()
+    private var isGameStarted = false
+    private enum class Line { RED, GREEN }
+    private var lastInputLine: Line? = null
     private var isDiscovering = false
 
     // --- Wi-Fi Direct ---
@@ -64,39 +76,27 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
 
     private val requestPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
-            if (perms.values.all { it }) {
-                startWifiDirect()
-            } else {
-                toast("Нужны все разрешения"); finish()
-            }
+            if (perms.values.all { it }) startWifiDirect()
+            else { toast("Нужны все разрешения"); finish() }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_wifi_client_hybrid)
-
         deviceList = findViewById(R.id.deviceListClient)
         val discoverButton: Button = findViewById(R.id.discoverButtonClient)
         val selectionStatusText: TextView = findViewById(R.id.statusTextClient)
-
         listAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, peerNames)
         deviceList.adapter = listAdapter
-
         discoverButton.setOnClickListener { discoverPeers() }
-
         deviceList.setOnItemClickListener { _, _, position, _ ->
             val device = peers[position]
             val config = WifiP2pConfig().apply { deviceAddress = device.deviceAddress }
             manager.connect(channel, config, object : WifiP2pManager.ActionListener {
-                override fun onSuccess() {
-                    toast("Подключение к ${device.deviceName}...")
-                }
-                override fun onFailure(reason: Int) {
-                    toast("Ошибка подключения: $reason")
-                }
+                override fun onSuccess() { toast("Подключение к ${device.deviceName}...") }
+                override fun onFailure(reason: Int) { toast("Ошибка подключения: $reason") }
             })
         }
-
         selectionStatusText.text = "Инициализация клиента..."
         checkAndRequestPermissions()
     }
@@ -109,51 +109,28 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         keypadContainer = findViewById(R.id.keypad_container)
         inputDisplay = findViewById(R.id.input_display)
         val resetButton: Button = findViewById(R.id.reset_button)
-
         redLineScrollView = findViewById(R.id.red_line_scrollview)
         greenLineScrollView = findViewById(R.id.green_line_scrollview)
         val redToggle: CheckBox = findViewById(R.id.red_line_toggle)
         val greenToggle: CheckBox = findViewById(R.id.green_line_toggle)
-
-        redToggle.setOnCheckedChangeListener { _, isChecked ->
-            redLineScrollView.visibility = if (isChecked) View.VISIBLE else View.GONE
-        }
-        greenToggle.setOnCheckedChangeListener { _, isChecked ->
-            greenLineScrollView.visibility = if (isChecked) View.VISIBLE else View.GONE
-        }
-
-        statusText.text = "✅ Соединение установлено! Готов к вводу."
+        redToggle.setOnCheckedChangeListener { _, isChecked -> redLineScrollView.visibility = if (isChecked) View.VISIBLE else View.GONE }
+        greenToggle.setOnCheckedChangeListener { _, isChecked -> greenLineScrollView.visibility = if (isChecked) View.VISIBLE else View.GONE }
+        statusText.text = "✅ Соединение! Введите числа от 0 до 36."
         createPhoneKeypad()
         resetButton.setOnClickListener { resetAll() }
     }
 
     private fun createPhoneKeypad() {
-        val keys = listOf(
-            listOf("1", "2", "3"),
-            listOf("4", "5", "6"),
-            listOf("7", "8", "9"),
-            listOf("⌫", "0", "✔")
-        )
-
+        val keys = listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", "✔"))
         val inflater = LayoutInflater.from(this)
         keys.forEach { rowKeys ->
-            val tableRow = TableRow(this).apply {
-                layoutParams = TableLayout.LayoutParams(
-                    TableLayout.LayoutParams.MATCH_PARENT,
-                    0,
-                    1f
-                )
-            }
+            val tableRow = TableRow(this).apply { layoutParams = TableLayout.LayoutParams(TableLayout.LayoutParams.MATCH_PARENT, 0, 1f) }
             rowKeys.forEach { key ->
                 val keyView = inflater.inflate(R.layout.keypad_button_view, tableRow, false)
                 keyView.findViewById<TextView>(R.id.keypad_number).text = key
                 keyView.findViewById<TextView>(R.id.keypad_letters).visibility = View.GONE
                 keyView.setOnClickListener { onKeypadClick(key) }
-                keyView.layoutParams = TableRow.LayoutParams(
-                    0,
-                    TableRow.LayoutParams.MATCH_PARENT,
-                    1f
-                )
+                keyView.layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.MATCH_PARENT, 1f)
                 tableRow.addView(keyView)
             }
             keypadContainer.addView(tableRow)
@@ -178,80 +155,94 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         }
     }
 
-    // ИЗМЕНЕНО: Убрана проверка на существующий номер
     private fun sendCurrentInput() {
         if (currentInput.isNotEmpty()) {
             val numberToSend = currentInput.toString().toIntOrNull()
-            if (numberToSend != null && numberToSend in 0..36) {
-                // Больше нет проверки if (red.contains...
-                handleNumberInput(numberToSend)
-            } else {
-                toast("Введите число от 0 до 36")
-            }
+            if (numberToSend != null && numberToSend in 0..36) handleNumberInput(numberToSend)
+            else toast("Введите число от 0 до 36")
             currentInput.clear()
             inputDisplay.text = ""
         }
     }
 
     private fun resetAll() {
-        red.clear()
-        green.clear()
-        currentInput.clear()
-        inputDisplay.text = ""
-        updateLineUI(redLayout, red, true)
-        updateLineUI(greenLayout, green, false)
-        statusText.text = "✅ Готов к вводу."
-        toast("Линии очищены")
+        red.clear(); green.clear(); currentInput.clear()
+        inputDisplay.text = ""; isGameStarted = false; lastInputLine = null
+        updateAllUI()
+        statusText.text = "Сброшено. Введите числа от 0 до 36."
+        toast("Все линии и состояния очищены")
         sendData(byteArrayOf(201.toByte()))
     }
 
-    // ИЗМЕНЕНО: Добавлена логика удаления перед добавлением
     private fun handleNumberInput(number: Int) {
-        // Сначала удаляем номер из любого списка, где он мог быть
-        red.remove(number)
-        green.remove(number)
+        if (!isGameStarted) handleInitialFill(number)
+        else handleGamePlay(number)
+    }
 
-        // Теперь выполняем стандартную логику добавления
-        statusText.text = "✅ Готов к вводу."
+    private fun handleInitialFill(number: Int) {
+        if (red.contains(number) || green.contains(number)) { toast("Число $number уже введено!"); return }
+        if (red.size < RED_LINE_CAPACITY) red.add(number)
+        else if (green.size < GREEN_LINE_CAPACITY) green.add(number)
         sendData(byteArrayOf(number.toByte()))
-
-        if (red.size < RED_LINE_CAPACITY) {
-            red.add(0, number)
+        updateAllUI()
+        if (red.size + green.size == TOTAL_NUMBERS) {
+            isGameStarted = true
+            statusText.text = "Started"
+            toast("Все числа введены. Начали!")
+            red.reverse(); green.reverse()
+            updateAllUI()
         } else {
-            if (green.size >= GREEN_LINE_CAPACITY) {
-                green.removeLast()
-            }
-            green.add(0, red.removeLast())
-            red.add(0, number)
+            statusText.text = "Осталось ввести: ${TOTAL_NUMBERS - (red.size + green.size)}"
         }
+    }
+
+    private fun handleGamePlay(number: Int) {
+        val currentLine: Line
+        when {
+            red.contains(number) -> { currentLine = Line.RED; red.remove(number) }
+            green.contains(number) -> { currentLine = Line.GREEN; green.remove(number) }
+            else -> { toast("Ошибка: число $number не найдено в линиях."); return }
+        }
+        red.add(0, number)
+        // ИСПРАВЛЕНИЕ СБОЯ: Используем removeAt вместо removeLast
+        if (red.size > RED_LINE_CAPACITY) green.add(0, red.removeAt(red.lastIndex))
+        if (green.size > GREEN_LINE_CAPACITY) green.removeAt(green.lastIndex)
+
+        val numbersToShow = if (lastInputLine == currentLine) {
+            if (currentLine == Line.GREEN) green else red
+        } else emptyList()
+
+        sendVisibilityCommand(numbersToShow)
+        lastInputLine = currentLine
+        updateAllUI()
+    }
+
+    private fun sendVisibilityCommand(visibleNumbers: List<Int>) {
+        if (visibleNumbers.size > 255) { Log.e("WifiClientActivity", "Слишком много номеров для отправки"); return }
+        val data = ByteArray(2 + visibleNumbers.size)
+        data[0] = 102.toByte()
+        data[1] = visibleNumbers.size.toByte()
+        visibleNumbers.forEachIndexed { index, number -> data[index + 2] = number.toByte() }
+        sendData(data)
+    }
+
+    private fun updateAllUI() {
         updateLineUI(redLayout, red, true)
         updateLineUI(greenLayout, green, false)
     }
 
-    // ИЗМЕНЕНО: Убрана установка слушателя кликов
     private fun updateLineUI(layout: LinearLayout, numbers: List<Int>, isRed: Boolean) {
         layout.removeAllViews()
         numbers.forEach { num ->
             val button = Button(this).apply {
-                text = num.toString()
-                minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
-                setPadding(12, 4, 12, 4)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(4, 0, 4, 0) }
-                // setOnClickListener { onLineNumberClick(numbers, isRed) } // УДАЛЕНО
-                isClickable = false // Делаем кнопку некликабельной
+                text = num.toString(); minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+                setPadding(12, 4, 12, 4); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(4, 0, 4, 0) }
+                isClickable = false
             }
             layout.addView(button)
         }
     }
-
-    // УДАЛЕНЫ: Методы onLineNumberClick и flashLine больше не нужны
-    // private fun onLineNumberClick(...) {}
-    // private fun flashLine(...) {}
-
 
     private fun sendData(data: ByteArray) {
         if (clientSocket?.isConnected == true) {
@@ -259,27 +250,17 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
                 try {
                     clientSocket?.outputStream?.write(data)
                     clientSocket?.outputStream?.flush()
-                } catch (e: IOException) {
-                    runOnUiThread { toast("Ошибка отправки: ${e.message}") }
-                }
+                } catch (e: IOException) { runOnUiThread { toast("Ошибка отправки: ${e.message}") } }
             }.start()
-        } else {
-            toast("Соединение не установлено")
-        }
+        } else toast("Соединение не установлено")
     }
 
     // ... Остальная часть класса без изменений ...
     private fun checkAndRequestPermissions() {
-        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
-        } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-        if (perms.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
-            startWifiDirect()
-        } else {
-            requestPermissionsLauncher.launch(perms)
-        }
+        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
+        else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (perms.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) startWifiDirect()
+        else requestPermissionsLauncher.launch(perms)
     }
 
     private fun startWifiDirect() {
@@ -290,20 +271,13 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
     }
 
     private fun discoverPeers() {
-        if (isDiscovering) {
-            toast("Поиск уже запущен...")
-            return
-        }
+        if (isDiscovering) { toast("Поиск уже запущен..."); return }
         val selectionStatusText: TextView = findViewById(R.id.statusTextClient)
         val discoverButton: Button = findViewById(R.id.discoverButtonClient)
-        discoverButton.isEnabled = false
-        discoverButton.alpha = 0.5f
-        isDiscovering = true
+        discoverButton.isEnabled = false; discoverButton.alpha = 0.5f; isDiscovering = true
         selectionStatusText.text = "Поиск устройств..."
         manager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-                toast("Поиск запущен успешно")
-            }
+            override fun onSuccess() { toast("Поиск запущен успешно") }
             override fun onFailure(reason: Int) {
                 val reasonText = when (reason) {
                     WifiP2pManager.P2P_UNSUPPORTED -> "Wi-Fi Direct не поддерживается."
@@ -312,9 +286,7 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
                     else -> "Неизвестная ошибка: код $reason"
                 }
                 toast("Ошибка запуска поиска: $reasonText")
-                isDiscovering = false
-                discoverButton.isEnabled = true
-                discoverButton.alpha = 1.0f
+                isDiscovering = false; discoverButton.isEnabled = true; discoverButton.alpha = 1.0f
                 selectionStatusText.text = "Ошибка. Попробуйте снова."
             }
         })
@@ -323,22 +295,16 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
     override fun onPeersAvailable(peerList: List<WifiP2pDevice>) {
         val discoverButton: Button? = findViewById(R.id.discoverButtonClient)
         isDiscovering = false
-        discoverButton?.isEnabled = true
-        discoverButton?.alpha = 1.0f
-
+        discoverButton?.isEnabled = true; discoverButton?.alpha = 1.0f
         val selectionStatusText: TextView? = findViewById(R.id.statusTextClient)
-        peers.clear()
-        peers.addAll(peerList)
-        peerNames.clear()
+        peers.clear(); peers.addAll(peerList); peerNames.clear()
         peerList.forEach { peerNames.add(it.deviceName) }
         listAdapter.notifyDataSetChanged()
         selectionStatusText?.text = if (peerList.isEmpty()) "Устройства не найдены." else "Выберите устройство."
     }
 
     override fun onConnectionInfoAvailable(info: WifiP2pInfo) {
-        if (info.groupFormed) {
-            Thread(ClientConnectionThread(info.groupOwnerAddress.hostAddress)).start()
-        }
+        if (info.groupFormed) Thread(ClientConnectionThread(info.groupOwnerAddress.hostAddress)).start()
     }
 
     inner class ClientConnectionThread(private val hostAddress: String) : Runnable {
@@ -348,37 +314,25 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
                 socket.connect(InetSocketAddress(hostAddress, 8888), 5000)
                 clientSocket = socket
                 runOnUiThread { setupMainUI() }
-            } catch (e: IOException) {
-                runOnUiThread { toast("Не удалось подключиться к серверу") }
-            }
+            } catch (e: IOException) { runOnUiThread { toast("Не удалось подключиться к серверу") } }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        if (::receiver.isInitialized) {
-            registerReceiver(receiver, intentFilter)
-        }
+        if (::receiver.isInitialized) registerReceiver(receiver, intentFilter)
     }
 
     override fun onPause() {
         super.onPause()
-        if (::receiver.isInitialized) {
-            unregisterReceiver(receiver)
-        }
+        if (::receiver.isInitialized) unregisterReceiver(receiver)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         manager.removeGroup(channel, null)
-        try {
-            clientSocket?.close()
-        } catch (e: IOException) {
-            Log.e("WifiClientActivity", "Error closing client socket", e)
-        }
+        try { clientSocket?.close() } catch (e: IOException) { Log.e("WifiClientActivity", "Error closing client socket", e) }
     }
 
-    private fun toast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    }
+    private fun toast(message: String) { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
 }

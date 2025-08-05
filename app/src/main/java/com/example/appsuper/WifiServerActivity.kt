@@ -2,9 +2,11 @@ package com.example.appsuper
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.wifi.p2p.WifiP2pDevice
@@ -40,6 +42,16 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
 
     companion object {
         const val ACTION_LOCK_ALL = "com.example.appsuper.ACTION_LOCK_ALL_OVERLAYS"
+        const val ACTION_ALL_NUMBERS_RECEIVED = "com.example.appsuper.ACTION_ALL_NUMBERS_RECEIVED"
+    }
+
+    private val buttonEnablerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_ALL_NUMBERS_RECEIVED) {
+                lockButton.isEnabled = true
+                toast("Все символы расставлены. Можно заморозить.")
+            }
+        }
     }
 
     private val intentFilter = IntentFilter().apply {
@@ -49,25 +61,13 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
     }
 
-    private val overlayPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            if (canDrawOverlays()) {
-                startWifiDirect()
-            } else {
-                toast("Разрешение на оверлей необходимо для работы")
-                finish()
-            }
-        }
+    private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (canDrawOverlays()) startWifiDirect() else { toast("Разрешение на оверлей необходимо для работы"); finish() }
+    }
 
-    private val requestPermissionsLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            if (permissions.values.all { it }) {
-                checkOverlayPermission()
-            } else {
-                toast("Нужны все разрешения для работы")
-                finish()
-            }
-        }
+    private val requestPermissionsLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+        if (permissions.values.all { it }) checkOverlayPermission() else { toast("Нужны все разрешения для работы"); finish() }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +75,8 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         statusText = findViewById(R.id.statusTextB)
         stopButton = findViewById(R.id.stopButtonB)
         lockButton = findViewById(R.id.lockButtonB)
+
+        registerReceiver(buttonEnablerReceiver, IntentFilter(ACTION_ALL_NUMBERS_RECEIVED), RECEIVER_EXPORTED)
 
         stopButton.setOnClickListener {
             cleanUp()
@@ -85,10 +87,10 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         }
 
         lockButton.setOnClickListener {
-            toast("Команда заморозки отправлена")
             sendBroadcast(Intent(ACTION_LOCK_ALL))
+            // ИЗМЕНЕНИЕ ЗДЕСЬ: Программная блокировка удалена, так как теперь она в манифесте
+            toast("Символы заморожены.")
         }
-
 
         statusText.text = "Инициализация сервера..."
         checkAndRequestPermissions()
@@ -137,9 +139,7 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         })
     }
 
-    override fun onPeersAvailable(peers: List<WifiP2pDevice>) {
-        // Серверу не важен этот метод
-    }
+    override fun onPeersAvailable(peers: List<WifiP2pDevice>) {}
 
     override fun onConnectionInfoAvailable(info: WifiP2pInfo) {
         if (info.groupFormed && info.isGroupOwner && !isServerRunning) {
@@ -172,6 +172,7 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
     }
 
     private fun cleanUp() {
+        // ИЗМЕНЕНИЕ ЗДЕСЬ: Разблокировка ориентации больше не нужна
         stopService(Intent(this, OverlayService::class.java))
         serverThread?.interrupt()
         serverThread = null
@@ -183,13 +184,14 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         runOnUiThread {
             stopButton.visibility = View.GONE
             lockButton.visibility = View.GONE
+            lockButton.isEnabled = false
         }
     }
 
     override fun onResume() {
         super.onResume()
         if (::receiver.isInitialized) {
-            registerReceiver(receiver, intentFilter)
+            registerReceiver(receiver, intentFilter, RECEIVER_EXPORTED)
         }
     }
 
@@ -202,6 +204,7 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterReceiver(buttonEnablerReceiver)
         cleanUp()
         if (::manager.isInitialized) {
             manager.removeGroup(channel, null)
