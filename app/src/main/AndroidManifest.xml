@@ -29,18 +29,15 @@
             </intent-filter>
         </activity>
 
+        <!-- ИЗМЕНЕНИЕ: Убран screenOrientation="portrait" и добавлен configChanges для сохранения соединения при повороте -->
         <activity
             android:name=".WifiClientActivity"
-            android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
-        <!-- ИЗМЕНЕНИЕ ЗДЕСЬ: Добавлена принудительная портретная ориентация -->
+        <!-- ИЗМЕНЕНИЕ: Убран screenOrientation="portrait", чтобы разрешить поворот экрана -->
         <activity
             android:name=".WifiServerActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-            android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity"
-            />
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
         <service
             android:name=".OverlayService"

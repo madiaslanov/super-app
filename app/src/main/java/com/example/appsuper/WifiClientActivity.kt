@@ -180,16 +180,29 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
     }
 
     private fun handleInitialFill(number: Int) {
-        if (red.contains(number) || green.contains(number)) { toast("Число $number уже введено!"); return }
-        if (red.size < RED_LINE_CAPACITY) red.add(number)
-        else if (green.size < GREEN_LINE_CAPACITY) green.add(number)
+        if (red.contains(number) || green.contains(number)) {
+            toast("Число $number уже введено!")
+            return
+        }
+
+        // ИЗМЕНЕНИЕ: Всегда добавляем число в начало красной линии
+        red.add(0, number)
+
+        // ИЗМЕНЕНИЕ: Если красная линия переполнена, перемещаем последний элемент в зеленую линию
+        if (red.size > RED_LINE_CAPACITY) {
+            if (green.size < GREEN_LINE_CAPACITY) {
+                green.add(0, red.removeAt(red.lastIndex))
+            }
+        }
+
         sendData(byteArrayOf(number.toByte()))
         updateAllUI()
+
         if (red.size + green.size == TOTAL_NUMBERS) {
             isGameStarted = true
             statusText.text = "Started"
             toast("Все числа введены. Начали!")
-            red.reverse(); green.reverse()
+            // reverse() больше не нужен, так как мы добавляем элементы в начало
             updateAllUI()
         } else {
             statusText.text = "Осталось ввести: ${TOTAL_NUMBERS - (red.size + green.size)}"
@@ -204,9 +217,15 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
             else -> { toast("Ошибка: число $number не найдено в линиях."); return }
         }
         red.add(0, number)
-        // ИСПРАВЛЕНИЕ СБОЯ: Используем removeAt вместо removeLast
-        if (red.size > RED_LINE_CAPACITY) green.add(0, red.removeAt(red.lastIndex))
-        if (green.size > GREEN_LINE_CAPACITY) green.removeAt(green.lastIndex)
+
+        if (red.size > RED_LINE_CAPACITY) {
+            if (green.size < GREEN_LINE_CAPACITY) {
+                green.add(0, red.removeAt(red.lastIndex))
+            }
+        }
+        if (green.size > GREEN_LINE_CAPACITY) {
+            green.removeAt(green.lastIndex)
+        }
 
         val numbersToShow = if (lastInputLine == currentLine) {
             if (currentLine == Line.GREEN) green else red
@@ -255,7 +274,6 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         } else toast("Соединение не установлено")
     }
 
-    // ... Остальная часть класса без изменений ...
     private fun checkAndRequestPermissions() {
         val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
         else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -330,7 +348,9 @@ class WifiClientActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
 
     override fun onDestroy() {
         super.onDestroy()
-        manager.removeGroup(channel, null)
+        if(::manager.isInitialized && ::channel.isInitialized) {
+            manager.removeGroup(channel, null)
+        }
         try { clientSocket?.close() } catch (e: IOException) { Log.e("WifiClientActivity", "Error closing client socket", e) }
     }
 
