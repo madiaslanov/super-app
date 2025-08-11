@@ -1,20 +1,13 @@
 package com.example.appsuper
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.ActivityInfo
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.net.wifi.p2p.WifiP2pDevice
-import android.net.wifi.p2p.WifiP2pInfo
-import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.View
@@ -23,22 +16,22 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import java.io.IOException
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.net.ServerSocket
+import java.net.SocketException
 
-@SuppressLint("MissingPermission")
-class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.YourActivityInterface {
+@SuppressLint("SetTextI18n")
+class WifiServerActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var stopButton: Button
     private lateinit var lockButton: Button
-    private lateinit var manager: WifiP2pManager
-    private lateinit var channel: WifiP2pManager.Channel
-    private lateinit var receiver: WifiDirectBroadcastReceiver
 
-    private var isServerRunning = false
+    private var serverSocket: ServerSocket? = null
     private var serverThread: Thread? = null
+    private var isServerRunning = false
 
     companion object {
         const val ACTION_LOCK_ALL = "com.example.appsuper.ACTION_LOCK_ALL_OVERLAYS"
@@ -54,132 +47,147 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         }
     }
 
-    private val intentFilter = IntentFilter().apply {
-        addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
-        addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
-        addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
-        addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
-    }
-
+    // ИЗМЕНЕНИЕ: Улучшенная логика обработки результата запроса разрешений
     private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (canDrawOverlays()) startWifiDirect() else { toast("Разрешение на оверлей необходимо для работы"); finish() }
-    }
-
-    private val requestPermissionsLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        if (permissions.values.all { it }) checkOverlayPermission() else { toast("Нужны все разрешения для работы"); finish() }
+        // Этот код выполнится, когда пользователь вернется с экрана настроек
+        if (canDrawOverlays()) {
+            // Если разрешение предоставлено, запускаем сервер
+            startServer()
+        } else {
+            // Если пользователь отказал, показываем критическое сообщение и не даем работать дальше
+            statusText.text = "Критическая ошибка:\nПриложение не может работать без разрешения на отображение поверх других окон.\n\nПожалуйста, перезапустите и предоставьте разрешение."
+            toast("Разрешение не предоставлено. Работа невозможна.")
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_device_b_simple)
+
         statusText = findViewById(R.id.statusTextB)
         stopButton = findViewById(R.id.stopButtonB)
         lockButton = findViewById(R.id.lockButtonB)
 
-        registerReceiver(buttonEnablerReceiver, IntentFilter(ACTION_ALL_NUMBERS_RECEIVED), RECEIVER_EXPORTED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(buttonEnablerReceiver, IntentFilter(ACTION_ALL_NUMBERS_RECEIVED), RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(buttonEnablerReceiver, IntentFilter(ACTION_ALL_NUMBERS_RECEIVED))
+        }
 
         stopButton.setOnClickListener {
             cleanUp()
-            toast("Сервис остановлен")
-            statusText.text = "Остановлено."
+            statusText.text = "Остановлено. Включите точку доступа и перезапустите это окно для новой игры."
             it.visibility = View.GONE
             lockButton.visibility = View.GONE
         }
 
         lockButton.setOnClickListener {
             sendBroadcast(Intent(ACTION_LOCK_ALL))
-            // ИЗМЕНЕНИЕ ЗДЕСЬ: Программная блокировка удалена, так как теперь она в манифесте
             toast("Символы заморожены.")
         }
 
-        statusText.text = "Инициализация сервера..."
-        checkAndRequestPermissions()
+        // Запускаем проверку при старте
+        checkOverlayPermissionAndStart()
     }
 
-    private fun checkAndRequestPermissions() {
-        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
-        } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-        if (perms.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
-            checkOverlayPermission()
-        } else {
-            requestPermissionsLauncher.launch(perms)
-        }
-    }
-
-    private fun checkOverlayPermission() {
+    // ИЗМЕНЕНИЕ: Метод с более понятным названием
+    private fun checkOverlayPermissionAndStart() {
         if (canDrawOverlays()) {
-            startWifiDirect()
+            // Если разрешение уже есть, сразу запускаем сервер
+            startServer()
         } else {
+            // Если разрешения нет, информируем пользователя и отправляем его в настройки
+            statusText.text = "Требуется разрешение:\nДля работы оверлеев необходимо разрешить приложению отображаться поверх других окон."
+            toast("Пожалуйста, предоставьте разрешение на следующем экране")
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             overlayPermissionLauncher.launch(intent)
         }
     }
 
-    private fun canDrawOverlays(): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        Settings.canDrawOverlays(this)
-    } else {
-        true
-    }
-
-    private fun startWifiDirect() {
-        manager = getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
-        channel = manager.initialize(this, Looper.getMainLooper(), null)
-        receiver = WifiDirectBroadcastReceiver(manager, channel, this)
-
-        manager.createGroup(channel, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-                statusText.text = "Группа создана.\nОжидание клиента..."
-            }
-            override fun onFailure(reason: Int) {
-                statusText.text = "Ошибка создания группы: $reason"
-            }
-        })
-    }
-
-    override fun onPeersAvailable(peers: List<WifiP2pDevice>) {}
-
-    override fun onConnectionInfoAvailable(info: WifiP2pInfo) {
-        if (info.groupFormed && info.isGroupOwner && !isServerRunning) {
-            isServerRunning = true
-            statusText.text = "✅ Клиент подключился! Запуск сервиса..."
-            stopButton.visibility = View.VISIBLE
-            lockButton.visibility = View.VISIBLE
-            serverThread = Thread(ServerThread()).apply { start() }
+    private fun canDrawOverlays(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
         }
+    }
+
+    private fun startServer() {
+        if (isServerRunning) return
+
+        val serverIp = getHotspotIpAddress()
+        val instructionText = if (serverIp != null) {
+            "Инструкция:\n1. Убедитесь, что точка доступа включена.\n2. Ваш IP для подключения:\n$serverIp\n3. Ожидайте подключения клиента..."
+        } else {
+            "Инструкция:\n1. Включите точку доступа (Wi-Fi Hotspot).\n2. IP-адрес не определен, попробуйте стандартный: 192.168.43.1\n3. Ожидайте подключения клиента..."
+        }
+        statusText.text = instructionText
+
+        serverThread = Thread(ServerThread()).apply { start() }
+        isServerRunning = true
+    }
+
+    // Остальной код остается без изменений...
+    private fun getHotspotIpAddress(): String? {
+        try {
+            val networkInterfaces = NetworkInterface.getNetworkInterfaces()
+            while (networkInterfaces.hasMoreElements()) {
+                val networkInterface = networkInterfaces.nextElement()
+                if (networkInterface.name.contains("ap") || networkInterface.name.contains("wlan")) {
+                    val inetAddresses = networkInterface.inetAddresses
+                    while (inetAddresses.hasMoreElements()) {
+                        val inetAddress = inetAddresses.nextElement()
+                        if (!inetAddress.isLoopbackAddress && inetAddress is Inet4Address) {
+                            return inetAddress.hostAddress
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ServerIP", "Не удалось получить IP адрес", e)
+        }
+        return null
     }
 
     inner class ServerThread : Runnable {
         override fun run() {
             try {
-                ServerSocket(8888).use { serverSocket ->
-                    while (!Thread.currentThread().isInterrupted) {
-                        Log.d("WifiDirect", "Сервер ожидает клиента на accept()...")
-                        val clientSocket = serverSocket.accept()
-                        Log.d("WifiDirect", "Клиент принят! Запуск OverlayService.")
-                        WifiSocketHolder.socket = clientSocket
-                        startService(Intent(this@WifiServerActivity, OverlayService::class.java))
+                serverSocket = ServerSocket(8888)
+                while (!Thread.currentThread().isInterrupted) {
+                    runOnUiThread { Log.d("Server", "Сервер ожидает клиента на accept()...") }
+                    val clientSocket = serverSocket!!.accept()
+                    WifiSocketHolder.socket = clientSocket
+                    startService(Intent(this@WifiServerActivity, OverlayService::class.java))
+                    runOnUiThread {
+                        statusText.text = "✅ Клиент подключен! Игра активна."
+                        stopButton.visibility = View.VISIBLE
+                        lockButton.visibility = View.VISIBLE
                     }
+                    break
                 }
+            } catch (e: SocketException) {
+                Log.i("Server", "Серверный сокет был закрыт, поток завершается.")
             } catch (e: IOException) {
-                Log.e("WifiDirect", "Ошибка сервера (возможно, сокет был закрыт): ${e.message}")
+                Log.e("Server", "Ошибка ввода/вывода в потоке сервера: ${e.message}")
             } finally {
+                Log.i("Server", "Поток сервера окончательно завершен.")
                 isServerRunning = false
             }
         }
     }
 
     private fun cleanUp() {
-        // ИЗМЕНЕНИЕ ЗДЕСЬ: Разблокировка ориентации больше не нужна
         stopService(Intent(this, OverlayService::class.java))
-        serverThread?.interrupt()
-        serverThread = null
         try {
             WifiSocketHolder.socket?.close()
             WifiSocketHolder.socket = null
-        } catch (e: IOException) { /* ignore */ }
+            serverSocket?.close()
+            serverSocket = null
+            serverThread?.interrupt()
+            serverThread = null
+        } catch (e: IOException) {
+            Log.e("Cleanup", "Ошибка при закрытии сокетов", e)
+        }
         isServerRunning = false
         runOnUiThread {
             stopButton.visibility = View.GONE
@@ -188,30 +196,13 @@ class WifiServerActivity : AppCompatActivity(), WifiDirectBroadcastReceiver.Your
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (::receiver.isInitialized) {
-            registerReceiver(receiver, intentFilter, RECEIVER_EXPORTED)
-        }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        if (::receiver.isInitialized) {
-            unregisterReceiver(receiver)
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(buttonEnablerReceiver)
         cleanUp()
-        if (::manager.isInitialized) {
-            manager.removeGroup(channel, null)
-        }
     }
 
     private fun toast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 }

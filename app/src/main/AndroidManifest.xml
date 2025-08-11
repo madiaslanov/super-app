@@ -1,25 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.example.appsuper">
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- ОБЯЗАТЕЛЬНОЕ разрешение для сокетов (клиент и сервер) -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation" />
+
+    <!-- Разрешение для оверлеев (только для Устройства B) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- УДАЛЕНО: Эти разрешения больше не нужны, так как мы не используем Wi-Fi Direct -->
+    <!-- <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> -->
+    <!-- <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" /> -->
+    <!-- <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" /> -->
+    <!-- <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" /> -->
+    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> -->
+
 
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SyncApp">
-
+        android:theme="@style/Theme.SyncApp"
+        tools:targetApi="31">
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -29,19 +35,19 @@
             </intent-filter>
         </activity>
 
-        <!-- ИЗМЕНЕНИЕ: Убран screenOrientation="portrait" и добавлен configChanges для сохранения соединения при повороте -->
+        <!-- Оставляем configChanges, чтобы не терять соединение при повороте экрана -->
         <activity
             android:name=".WifiClientActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
-        <!-- ИЗМЕНЕНИЕ: Убран screenOrientation="portrait", чтобы разрешить поворот экрана -->
         <activity
             android:name=".WifiServerActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
         <service
             android:name=".OverlayService"
+            android:enabled="true"
             android:exported="false" />
-
     </application>
+
 </manifest>
