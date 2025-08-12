@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -64,12 +63,17 @@ class OverlayService : Service() {
 
                 when (command) {
                     in 0..36 -> uiHandler.post { showOverlay(command) }
-                    100, 101 -> readNumberList(inputStream)
                     102 -> {
                         val visibleList = readNumberList(inputStream)
                         uiHandler.post { setOverlaysVisibility(visibleList) }
                     }
                     201 -> uiHandler.post { removeAllOverlays() }
+                    202 -> {
+                        val numberToDelete = inputStream.read()
+                        if (numberToDelete != -1) {
+                            uiHandler.post { deleteOverlay(numberToDelete) }
+                        }
+                    }
                 }
             }
         } catch (e: IOException) {
@@ -88,19 +92,25 @@ class OverlayService : Service() {
         return list
     }
 
-    // ИЗМЕНЕНО: Убрана проверка "if (view.tag != "frozen")", чтобы логика видимости работала всегда
+    private fun deleteOverlay(number: Int) {
+        overlays[number]?.let { viewToRemove ->
+            if (viewToRemove.isAttachedToWindow) {
+                windowManager.removeView(viewToRemove)
+            }
+            overlays.remove(number)
+            Log.d("OverlayService", "Удален оверлей для числа $number")
+        }
+    }
+
     private fun setOverlaysVisibility(visibleNumbers: List<Int>) {
         overlays.forEach { (number, view) ->
             val params = view.layoutParams as WindowManager.LayoutParams
             if (visibleNumbers.contains(number)) {
-                // Делаем видимым и интерактивным (если не заморожен)
                 view.visibility = View.VISIBLE
-                // Если символ не заморожен, делаем его интерактивным
                 if (view.tag != "frozen") {
                     params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
                 }
             } else {
-                // Делаем невидимым и "прозрачным" для касаний
                 view.visibility = View.INVISIBLE
                 params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             }
@@ -133,8 +143,7 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = 0
-            y = 100
+            x = 0; y = 100
         }
 
         symbolView.setOnTouchListener(MovableTouchListener(params))
@@ -164,7 +173,6 @@ class OverlayService : Service() {
             view.visibility = View.INVISIBLE
             view.setOnTouchListener(null)
             view.tag = "frozen"
-
             val params = view.layoutParams as WindowManager.LayoutParams
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             if (view.isAttachedToWindow) {

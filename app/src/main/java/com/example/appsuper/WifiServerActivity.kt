@@ -47,14 +47,10 @@ class WifiServerActivity : AppCompatActivity() {
         }
     }
 
-    // ИЗМЕНЕНИЕ: Улучшенная логика обработки результата запроса разрешений
     private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        // Этот код выполнится, когда пользователь вернется с экрана настроек
         if (canDrawOverlays()) {
-            // Если разрешение предоставлено, запускаем сервер
             startServer()
         } else {
-            // Если пользователь отказал, показываем критическое сообщение и не даем работать дальше
             statusText.text = "Критическая ошибка:\nПриложение не может работать без разрешения на отображение поверх других окон.\n\nПожалуйста, перезапустите и предоставьте разрешение."
             toast("Разрешение не предоставлено. Работа невозможна.")
         }
@@ -86,17 +82,13 @@ class WifiServerActivity : AppCompatActivity() {
             toast("Символы заморожены.")
         }
 
-        // Запускаем проверку при старте
         checkOverlayPermissionAndStart()
     }
 
-    // ИЗМЕНЕНИЕ: Метод с более понятным названием
     private fun checkOverlayPermissionAndStart() {
         if (canDrawOverlays()) {
-            // Если разрешение уже есть, сразу запускаем сервер
             startServer()
         } else {
-            // Если разрешения нет, информируем пользователя и отправляем его в настройки
             statusText.text = "Требуется разрешение:\nДля работы оверлеев необходимо разрешить приложению отображаться поверх других окон."
             toast("Пожалуйста, предоставьте разрешение на следующем экране")
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
@@ -127,7 +119,6 @@ class WifiServerActivity : AppCompatActivity() {
         isServerRunning = true
     }
 
-    // Остальной код остается без изменений...
     private fun getHotspotIpAddress(): String? {
         try {
             val networkInterfaces = NetworkInterface.getNetworkInterfaces()
