@@ -8,12 +8,8 @@
     <!-- Разрешение для оверлеев (только для Устройства B) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- УДАЛЕНО: Эти разрешения больше не нужны, так как мы не используем Wi-Fi Direct -->
-    <!-- <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> -->
-    <!-- <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" /> -->
-    <!-- <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" /> -->
-    <!-- <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" /> -->
-    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> -->
+    <!-- <<< ДОБАВЛЕНО: Разрешение, чтобы служба могла работать в фоне постоянно -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
 
     <application
@@ -47,7 +43,10 @@
         <service
             android:name=".OverlayService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+        <!-- <<< ДОБАВЛЕНО: Указываем тип службы для современных версий Android -->
+
     </application>
 
 </manifest>

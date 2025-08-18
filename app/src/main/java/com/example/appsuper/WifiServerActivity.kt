@@ -33,14 +33,12 @@ class WifiServerActivity : AppCompatActivity() {
     private var serverThread: Thread? = null
     private var isServerRunning = false
 
-    companion object {
-        const val ACTION_LOCK_ALL = "com.example.appsuper.ACTION_LOCK_ALL_OVERLAYS"
-        const val ACTION_ALL_NUMBERS_RECEIVED = "com.example.appsuper.ACTION_ALL_NUMBERS_RECEIVED"
-    }
+    // <<< MODIFIED: Removed companion object. Constants are now in AppConstants.kt
 
     private val buttonEnablerReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == ACTION_ALL_NUMBERS_RECEIVED) {
+            // <<< MODIFIED: Use AppConstants
+            if (intent?.action == AppConstants.ACTION_ALL_NUMBERS_RECEIVED) {
                 lockButton.isEnabled = true
                 toast("Все символы расставлены. Можно заморозить.")
             }
@@ -64,10 +62,12 @@ class WifiServerActivity : AppCompatActivity() {
         stopButton = findViewById(R.id.stopButtonB)
         lockButton = findViewById(R.id.lockButtonB)
 
+        // <<< MODIFIED: Use AppConstants
+        val intentFilter = IntentFilter(AppConstants.ACTION_ALL_NUMBERS_RECEIVED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(buttonEnablerReceiver, IntentFilter(ACTION_ALL_NUMBERS_RECEIVED), RECEIVER_EXPORTED)
+            registerReceiver(buttonEnablerReceiver, intentFilter, RECEIVER_EXPORTED)
         } else {
-            registerReceiver(buttonEnablerReceiver, IntentFilter(ACTION_ALL_NUMBERS_RECEIVED))
+            registerReceiver(buttonEnablerReceiver, intentFilter)
         }
 
         stopButton.setOnClickListener {
@@ -78,7 +78,8 @@ class WifiServerActivity : AppCompatActivity() {
         }
 
         lockButton.setOnClickListener {
-            sendBroadcast(Intent(ACTION_LOCK_ALL))
+            // <<< MODIFIED: Use AppConstants
+            sendBroadcast(Intent(AppConstants.ACTION_LOCK_ALL))
             toast("Символы заморожены.")
         }
 

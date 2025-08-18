@@ -2,6 +2,8 @@ package com.example.appsuper
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
@@ -50,6 +52,11 @@ class WifiClientActivity : AppCompatActivity() {
     // --- Network ---
     private var clientSocket: Socket? = null
 
+    // <<< NEW: Logic to keep the connection alive
+    private val keepAliveHandler = Handler(Looper.getMainLooper())
+    private var keepAliveRunnable: Runnable? = null
+    private val KEEP_ALIVE_INTERVAL = 15000L // 15 seconds
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupConnectionUI()
@@ -79,7 +86,10 @@ class WifiClientActivity : AppCompatActivity() {
                 socket.connect(InetSocketAddress(hostAddress, 8888), 5000)
                 socket.tcpNoDelay = true
                 clientSocket = socket
-                runOnUiThread { setupMainUI() }
+                runOnUiThread {
+                    setupMainUI()
+                    startKeepAlive() // <<< MODIFIED: Start the keep-alive task
+                }
             } catch (e: IOException) {
                 Log.e("Client", "Не удалось подключиться к серверу: ${e.message}")
                 runOnUiThread {
@@ -172,36 +182,66 @@ class WifiClientActivity : AppCompatActivity() {
         } else {
             statusText.text = "Осталось ввести: ${TOTAL_NUMBERS - (red.size + green.size)}"
         }
-        updateAllUI() // Crucial call to re-render buttons as non-clickable
+        updateAllUI()
     }
 
     private fun handleGamePlay(number: Int) {
-        movesMadeAfterStart++
-        val currentLine: Line
-        when {
-            red.contains(number) -> { currentLine = Line.RED; red.remove(number) }
-            green.contains(number) -> { currentLine = Line.GREEN; green.remove(number) }
-            else -> { toast("Ошибка: число $number не найдено."); movesMadeAfterStart--; return }
+        val isNumberInRed = red.contains(number)
+        val isNumberInGreen = green.contains(number)
+        if (!isNumberInRed && !isNumberInGreen) {
+            toast("Ошибка: число $number не найдено.")
+            return
+        }
+        var isAlreadyPlayed = false
+        if (isNumberInRed) {
+            val indexInRed = red.indexOf(number)
+            if (movesMadeAfterStart > 0 && indexInRed < movesMadeAfterStart) {
+                isAlreadyPlayed = true
+            }
+        }
+        else if (isNumberInGreen) {
+            if (movesMadeAfterStart > RED_LINE_CAPACITY) {
+                val playedCountOnGreen = movesMadeAfterStart - RED_LINE_CAPACITY
+                val indexInGreen = green.indexOf(number)
+                if (playedCountOnGreen > 0 && indexInGreen < playedCountOnGreen) {
+                    isAlreadyPlayed = true
+                }
+            }
+        }
+        if (!isAlreadyPlayed) {
+            movesMadeAfterStart++
+        }
+        val currentLine = if (isNumberInRed) Line.RED else Line.GREEN
+        if (isNumberInRed) {
+            red.remove(number)
+        } else {
+            green.remove(number)
         }
         red.add(0, number)
-        if (red.size > RED_LINE_CAPACITY) { if (green.size < GREEN_LINE_CAPACITY) { green.add(0, red.removeAt(red.lastIndex)) } }
-        if (green.size > GREEN_LINE_CAPACITY) { green.removeAt(green.lastIndex) }
-        val numbersToShow = if (lastInputLine == currentLine) { if (currentLine == Line.GREEN) green else red } else emptyList()
+        if (red.size > RED_LINE_CAPACITY) {
+            if (green.size < GREEN_LINE_CAPACITY) {
+                green.add(0, red.removeAt(red.lastIndex))
+            }
+        }
+        if (green.size > GREEN_LINE_CAPACITY) {
+            green.removeAt(green.lastIndex)
+        }
+        val numbersToShow = if (lastInputLine == currentLine) {
+            if (currentLine == Line.GREEN) green else red
+        } else {
+            emptyList()
+        }
         sendVisibilityCommand(numbersToShow)
         lastInputLine = currentLine
         updateAllUI()
     }
 
-    // --- LOGIC CHANGE HERE ---
-    private fun handleDeleteClick(numberToDelete: Int) {
-        // Guard clause: if game has started, do nothing. This reverses the logic.
-        if (isGameStarted) return
 
-        // Simple removal logic for pre-start phase
+    private fun handleDeleteClick(numberToDelete: Int) {
+        if (isGameStarted) return
         if (!red.remove(numberToDelete)) {
             green.remove(numberToDelete)
         }
-
         updateAllUI()
         sendDeleteCommand(numberToDelete)
         toast("Число $numberToDelete удалено")
@@ -224,16 +264,12 @@ class WifiClientActivity : AppCompatActivity() {
         updateLineUI(greenLayout, green, false)
     }
 
-    // --- LOGIC CHANGE HERE ---
     private fun createNumberButton(number: Int): Button {
         return Button(this).apply {
             text = number.toString()
             minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
             setPadding(12, 4, 12, 4); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(4, 0, 4, 0) }
-
-            // This is the core logic change:
-            // Buttons are clickable for deletion ONLY if the game has NOT started.
             if (!isGameStarted) {
                 isClickable = true
                 setOnClickListener { handleDeleteClick(number) }
@@ -246,18 +282,14 @@ class WifiClientActivity : AppCompatActivity() {
 
     private fun updateLineUI(layout: LinearLayout, numbers: List<Int>, isRed: Boolean) {
         layout.removeAllViews()
-
-        // The barrier logic is now contained and only runs if the game has started.
         if (isGameStarted) {
             val barrier = TextView(this).apply {
                 text = "|"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
                 setTextColor(resources.getColor(android.R.color.white, null))
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(8, 0, 8, 0) }
             }
-
-            val barrierOnRed = movesMadeAfterStart <= RED_LINE_CAPACITY
+            val barrierOnRed = movesMadeAfterStart > 0 && movesMadeAfterStart <= RED_LINE_CAPACITY
             val barrierOnGreen = movesMadeAfterStart > RED_LINE_CAPACITY && movesMadeAfterStart <= RED_LINE_CAPACITY + GREEN_LINE_CAPACITY
-
             if (isRed) {
                 if (barrierOnRed) {
                     val playedCount = movesMadeAfterStart
@@ -267,7 +299,7 @@ class WifiClientActivity : AppCompatActivity() {
                 } else {
                     numbers.forEach { layout.addView(createNumberButton(it)) }
                 }
-            } else { // Green line
+            } else { // Зеленая линия
                 if (barrierOnGreen) {
                     val playedCountOnGreen = movesMadeAfterStart - RED_LINE_CAPACITY
                     numbers.take(playedCountOnGreen).forEach { layout.addView(createNumberButton(it)) }
@@ -278,7 +310,6 @@ class WifiClientActivity : AppCompatActivity() {
                 }
             }
         } else {
-            // Pre-start: just render the buttons (they will be deletable)
             numbers.forEach { num -> layout.addView(createNumberButton(num)) }
         }
     }
@@ -289,14 +320,50 @@ class WifiClientActivity : AppCompatActivity() {
                 try {
                     clientSocket?.outputStream?.write(data)
                     clientSocket?.outputStream?.flush()
-                } catch (e: IOException) { runOnUiThread { toast("Ошибка отправки: соединение потеряно.") } }
+                } catch (e: IOException) {
+                    runOnUiThread {
+                        toast("Ошибка отправки: соединение потеряно.")
+                        stopKeepAlive() // <<< MODIFIED: Stop the task on error
+                    }
+                }
             }.start()
-        } else toast("Соединение не установлено")
+        } else {
+            toast("Соединение не установлено")
+            stopKeepAlive() // <<< MODIFIED: Stop the task if not connected
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        try { clientSocket?.close() } catch (e: IOException) { Log.e("WifiClientActivity", "Error closing client socket", e) }
+        stopKeepAlive() // <<< MODIFIED: Clean up the task
+        try {
+            clientSocket?.close()
+        } catch (e: IOException) {
+            Log.e("WifiClientActivity", "Error closing client socket", e)
+        }
+    }
+
+    // <<< NEW: Methods to manage the keep-alive task
+    private fun startKeepAlive() {
+        if (keepAliveRunnable != null) return // Already running
+
+        keepAliveRunnable = object : Runnable {
+            override fun run() {
+                if (clientSocket?.isConnected == true) {
+                    Log.d("KeepAlive", "Sending keep-alive packet.")
+                    sendData(byteArrayOf(AppConstants.KEEP_ALIVE_BYTE))
+                    keepAliveHandler.postDelayed(this, KEEP_ALIVE_INTERVAL)
+                }
+            }
+        }
+        // Start the first run
+        keepAliveHandler.postDelayed(keepAliveRunnable!!, KEEP_ALIVE_INTERVAL)
+    }
+
+    private fun stopKeepAlive() {
+        keepAliveRunnable?.let { keepAliveHandler.removeCallbacks(it) }
+        keepAliveRunnable = null
+        Log.d("KeepAlive", "Keep-alive stopped.")
     }
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()

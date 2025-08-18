@@ -1,6 +1,9 @@
 package com.example.appsuper
 
 import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.*
 import android.graphics.PixelFormat
@@ -16,6 +19,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.app.NotificationCompat
 import java.io.IOException
 import java.io.InputStream
 import java.net.Socket
@@ -28,9 +32,13 @@ class OverlayService : Service() {
     private var listeningThread: Thread? = null
     private var allNumbersReceivedBroadcastSent = false
 
+    // <<< НОВОЕ: Константы для уведомления Foreground Service
+    private val NOTIFICATION_CHANNEL_ID = "com.example.appsuper.OverlayServiceChannel"
+    private val NOTIFICATION_ID = 101
+
     private val lockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == WifiServerActivity.ACTION_LOCK_ALL) {
+            if (intent?.action == AppConstants.ACTION_LOCK_ALL) {
                 uiHandler.post { freezeAndHideAll() }
             }
         }
@@ -38,10 +46,13 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        registerReceiver(lockReceiver, IntentFilter(WifiServerActivity.ACTION_LOCK_ALL), RECEIVER_EXPORTED)
+        registerReceiver(lockReceiver, IntentFilter(AppConstants.ACTION_LOCK_ALL), RECEIVER_EXPORTED)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // <<< ИЗМЕНЕНО: Запускаемся как Foreground Service, чтобы система не убила процесс
+        startAsForegroundService()
+
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val socket = WifiSocketHolder.socket
         if (socket == null || socket.isClosed) {
@@ -54,12 +65,40 @@ class OverlayService : Service() {
         return START_STICKY
     }
 
+    // <<< НОВОЕ: Метод для создания уведомления и запуска службы в режиме foreground
+    private fun startAsForegroundService() {
+        // Создаем канал уведомлений (обязательно для Android 8.0+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelName = "Активное соединение"
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                channelName,
+                NotificationManager.IMPORTANCE_LOW // Низкий приоритет, чтобы не мешать пользователю
+            )
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(channel)
+        }
+
+        // Создаем постоянное уведомление
+        val notification: Notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("AppSuper Активен")
+            .setContentText("Соединение с устройством А установлено.")
+            // Убедитесь, что у вас есть иконка ic_launcher_foreground в res/drawable
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setPriority(NotificationCompat.PRIORITY_MIN) // Минимальный приоритет
+            .setOngoing(true) // Уведомление нельзя смахнуть
+            .build()
+
+        // "Продвигаем" службу до foreground service
+        startForeground(NOTIFICATION_ID, notification)
+    }
+
     private fun listenToSocket(socket: Socket) {
         try {
             val inputStream = socket.getInputStream()
             while (!Thread.currentThread().isInterrupted) {
                 val command = inputStream.read()
-                if (command == -1) break
+                if (command == -1) break // Соединение разорвано
 
                 when (command) {
                     in 0..36 -> uiHandler.post { showOverlay(command) }
@@ -74,12 +113,17 @@ class OverlayService : Service() {
                             uiHandler.post { deleteOverlay(numberToDelete) }
                         }
                     }
+                    // Обрабатываем keep-alive байт, просто игнорируя его
+                    AppConstants.KEEP_ALIVE_BYTE.toInt() and 0xFF -> {
+                        Log.v("OverlayService", "Пакет keep-alive получен.")
+                    }
                 }
             }
         } catch (e: IOException) {
-            Log.e("OverlayService", "Сокет закрыт: ${e.message}")
+            Log.e("OverlayService", "Сокет закрыт или произошла ошибка: ${e.message}")
         } finally {
-            uiHandler.post { stopSelf() }
+            Log.d("OverlayService", "Поток прослушивания сокета завершен.")
+            uiHandler.post { stopSelf() } // Останавливаем службу, если соединение потеряно
         }
     }
 
@@ -151,7 +195,7 @@ class OverlayService : Service() {
         overlays[number] = symbolView
 
         if (!allNumbersReceivedBroadcastSent && overlays.size == 37) {
-            sendBroadcast(Intent(WifiServerActivity.ACTION_ALL_NUMBERS_RECEIVED))
+            sendBroadcast(Intent(AppConstants.ACTION_ALL_NUMBERS_RECEIVED))
             allNumbersReceivedBroadcastSent = true
         }
     }
@@ -193,6 +237,9 @@ class OverlayService : Service() {
         unregisterReceiver(lockReceiver)
         listeningThread?.interrupt()
         uiHandler.post { removeAllOverlays() }
+        // <<< ИЗМЕНЕНО: Останавливаем foreground service и убираем уведомление при уничтожении службы
+        stopForeground(true)
+        Log.d("OverlayService", "Служба уничтожена.")
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
