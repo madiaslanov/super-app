@@ -1,16 +1,18 @@
 package com.example.appsuper
 
 /**
- * An object to hold constants shared across different parts of the app,
- * like Activity and Service, to avoid direct dependencies.
+ * Объект для хранения констант (действий Intent) для связи между Activity и Service.
  */
 object AppConstants {
-    // --- Broadcast Actions ---
-    const val ACTION_LOCK_ALL = "com.example.appsuper.ACTION_LOCK_ALL_OVERLAYS"
-    const val ACTION_ALL_NUMBERS_RECEIVED = "com.example.appsuper.ACTION_ALL_NUMBERS_RECEIVED"
+    // --- Действия для управления OverlayService ---
+    const val ACTION_SHOW_SYMBOL = "com.example.appsuper.ACTION_SHOW_SYMBOL"
+    const val ACTION_DELETE_SYMBOL = "com.example.appsuper.ACTION_DELETE_SYMBOL"
+    const val ACTION_REMOVE_ALL_SYMBOLS = "com.example.appsuper.ACTION_REMOVE_ALL_SYMBOLS"
+    const val ACTION_HIDE_ALL_SYMBOLS = "com.example.appsuper.ACTION_HIDE_ALL_SYMBOLS"
+    const val ACTION_SET_VISIBILITY = "com.example.appsuper.ACTION_SET_VISIBILITY"
+    const val ACTION_FREEZE_ALL = "com.example.appsuper.ACTION_FREEZE_ALL" // НОВАЯ КОНСТАНТА
 
-    // --- Network Commands ---
-    // A special byte sent periodically to keep the TCP connection alive.
-    // Value is 255 (or -1 as a signed Byte).
-    const val KEEP_ALIVE_BYTE: Byte = -1
+    // --- Ключи для передачи данных в Intent ---
+    const val EXTRA_NUMBER = "com.example.appsuper.EXTRA_NUMBER"
+    const val EXTRA_VISIBLE_LIST = "com.example.appsuper.EXTRA_VISIBLE_LIST"
 }

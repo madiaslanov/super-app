@@ -2,14 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ОБЯЗАТЕЛЬНОЕ разрешение для сокетов (клиент и сервер) -->
-    <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- Разрешение для оверлеев (только для Устройства B) -->
+    <!-- Разрешение для оверлеев -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-    <!-- <<< ДОБАВЛЕНО: Разрешение, чтобы служба могла работать в фоне постоянно -->
+    <!-- Разрешение, чтобы служба могла работать в фоне постоянно -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Для Android 13+ требуется разрешение на показ уведомлений -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
 
     <application
@@ -24,28 +22,23 @@
         tools:targetApi="31">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="adjustPan"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Оставляем configChanges, чтобы не терять соединение при повороте экрана -->
-        <activity
-            android:name=".WifiClientActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
-
-        <activity
-            android:name=".WifiServerActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
-
         <service
             android:name=".OverlayService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
-        <!-- <<< ДОБАВЛЕНО: Указываем тип службы для современных версий Android -->
+            android:foregroundServiceType="specialUse"
+            tools:targetApi="UPSIDE_DOWN_CAKE">
+        </service>
 
     </application>
 
