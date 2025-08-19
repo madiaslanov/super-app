@@ -109,15 +109,28 @@ class MainActivity : AppCompatActivity() {
         toggleKeyboardButton = findViewById(R.id.toggle_keyboard_button)
         freezeButton = findViewById(R.id.freeze_button)
 
-        findViewById<Button>(R.id.reset_button).setOnClickListener { resetAll() }
         showLinesCheckbox.setOnCheckedChangeListener { _, isChecked -> lineScrollView.visibility = if (isChecked) View.VISIBLE else View.GONE }
-        toggleKeyboardButton.setOnClickListener { keypadContainer.visibility = if (keypadContainer.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+
+        // ИЗМЕНЕНО: При нажатии на кнопку показываются все элементы
+        toggleKeyboardButton.setOnClickListener {
+            if (keypadContainer.visibility == View.VISIBLE) {
+                // Если клавиатура уже видна, скрываем ее
+                keypadContainer.visibility = View.GONE
+            } else {
+                // Если скрыта, показываем все элементы: клавиатуру и линию
+                keypadContainer.visibility = View.VISIBLE
+                lineScrollView.visibility = View.VISIBLE
+                showLinesCheckbox.isChecked = true
+            }
+        }
+
 
         freezeButton.setOnClickListener {
             sendCommandToService(AppConstants.ACTION_FREEZE_ALL)
             sendCommandToService(AppConstants.ACTION_HIDE_ALL_SYMBOLS)
             toast("Символы заморожены и скрыты")
-            it.isEnabled = false
+            // ИЗМЕНЕНИЕ: Строка ниже удалена, чтобы кнопка всегда была активна
+            // it.isEnabled = false
         }
 
         statusText.text = "Введите числа от 0 до 36."
@@ -161,10 +174,15 @@ class MainActivity : AppCompatActivity() {
     private fun sendCurrentInput() {
         if (currentInput.isNotEmpty()) {
             val numberToSend = currentInput.toString().toIntOrNull()
-            if (numberToSend != null && numberToSend in 0..36) handleNumberInput(numberToSend)
-            else toast("Введите число от 0 до 36")
+            if (numberToSend != null && numberToSend in 0..36) {
+                handleNumberInput(numberToSend)
+            } else {
+                toast("Введите число от 0 до 36")
+            }
             currentInput.clear()
             inputDisplay.text = ""
+            // ИЗМЕНЕНО: Автоматически скрываем клавиатуру после отправки
+            keypadContainer.visibility = View.GONE
         }
     }
 
@@ -174,7 +192,8 @@ class MainActivity : AppCompatActivity() {
         isGameStarted = false
         lastInputWasInRed = null
         movesMadeAfterStart = 0
-        freezeButton.isEnabled = false
+        // ИЗМЕНЕНИЕ: Строка ниже удалена, кнопка всегда активна
+        // freezeButton.isEnabled = false
         updateAllUI()
         statusText.text = "Сброшено. Введите числа от 0 до 36."
         toast("Все линии и состояния очищены")
@@ -212,7 +231,8 @@ class MainActivity : AppCompatActivity() {
             isGameStarted = true
             movesMadeAfterStart = 0
             statusText.text = "Start"
-            freezeButton.isEnabled = true
+            // ИЗМЕНЕНИЕ: Строка ниже удалена, кнопка всегда активна
+            // freezeButton.isEnabled = true
             toast("Все числа введены. Начали!")
         } else {
             statusText.text = "Осталось ввести: ${TOTAL_NUMBERS - (red.size + green.size)}"
@@ -234,9 +254,10 @@ class MainActivity : AppCompatActivity() {
             sendCommandToService(AppConstants.ACTION_DELETE_SYMBOL, number)
             updateAllUI()
             statusText.text = "Осталось ввести: ${TOTAL_NUMBERS - (red.size + green.size)}"
-            if (freezeButton.isEnabled) {
-                freezeButton.isEnabled = false
-            }
+            // ИЗМЕНЕНИЕ: Блок if ниже удален, кнопка всегда активна
+            // if (freezeButton.isEnabled) {
+            //     freezeButton.isEnabled = false
+            // }
             toast("Число $number удалено")
         }
     }
