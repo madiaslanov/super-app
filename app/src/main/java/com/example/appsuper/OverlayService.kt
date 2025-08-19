@@ -1,10 +1,7 @@
 package com.example.appsuper
 
 import android.annotation.SuppressLint
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -15,64 +12,152 @@ import android.os.Looper
 import android.util.Log
 import android.view.*
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 
-class OverlayService : Service() {
+class OverlayService : Service(), MainAppView.AppViewListener {
 
     private lateinit var windowManager: WindowManager
     private val overlays = mutableMapOf<Int, View>()
     private val uiHandler = Handler(Looper.getMainLooper())
 
+    private var floatingButtonView: View? = null
+    private var mainOverlayView: MainAppView? = null // Теперь это наш кастомный View
+
     private val NOTIFICATION_CHANNEL_ID = "com.example.appsuper.OverlayServiceChannel"
     private val NOTIFICATION_ID = 101
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onCreate() {
+        super.onCreate()
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         startAsForegroundService()
-        if (!::windowManager.isInitialized) {
-            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        }
+        uiHandler.post { showFloatingButton() }
+    }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            AppConstants.ACTION_SHOW_SYMBOL -> {
-                val number = intent.getIntExtra(AppConstants.EXTRA_NUMBER, -1)
-                if (number != -1) uiHandler.post { showOverlay(number) }
-            }
-            AppConstants.ACTION_DELETE_SYMBOL -> {
-                val number = intent.getIntExtra(AppConstants.EXTRA_NUMBER, -1)
-                if (number != -1) uiHandler.post { deleteOverlay(number) }
-            }
-            AppConstants.ACTION_REMOVE_ALL_SYMBOLS -> uiHandler.post { removeAllOverlays() }
+            AppConstants.ACTION_SHOW_SYMBOL -> handleShowSymbol(intent)
+            AppConstants.ACTION_DELETE_SYMBOL -> handleDeleteSymbol(intent)
+            AppConstants.ACTION_REMOVE_ALL_SYMBOLS -> uiHandler.post { removeAllNumberOverlays() }
             AppConstants.ACTION_HIDE_ALL_SYMBOLS -> uiHandler.post { hideAllOverlays() }
-            AppConstants.ACTION_SET_VISIBILITY -> {
-                val visibleList = intent.getIntegerArrayListExtra(AppConstants.EXTRA_VISIBLE_LIST)
-                visibleList?.let { uiHandler.post { setOverlaysVisibility(it) } }
-            }
-            // НОВЫЙ ОБРАБОТЧИК
+            AppConstants.ACTION_SET_VISIBILITY -> handleSetVisibility(intent)
             AppConstants.ACTION_FREEZE_ALL -> uiHandler.post { freezeAllOverlays() }
         }
-
         return START_STICKY
     }
 
-    private fun startAsForegroundService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelName = "AppSuper Service"
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+    private fun showFloatingButton() {
+        if (floatingButtonView != null) return
+        val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
+        floatingButtonView = inflater.inflate(R.layout.floating_button_layout, null)
+        val params = getLayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0; y = 100
         }
+        floatingButtonView?.setOnTouchListener(MovableTouchListener(params, floatingButtonView!!) {
+            if (mainOverlayView == null) {
+                showMainOverlay()
+            } else {
+                hideMainOverlay()
+            }
+        })
+        windowManager.addView(floatingButtonView, params)
+    }
 
-        val notification: Notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("AppSuper Активен")
-            .setContentText("Оверлей работает в фоновом режиме.")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setOngoing(true)
-            .build()
+    private fun showMainOverlay() {
+        if (mainOverlayView != null) return
+        mainOverlayView = MainAppView(this).apply {
+            setListener(this@OverlayService)
+            setOverlayMode() // Делаем фон прозрачным
+        }
+        val params = getLayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT).apply {
+            flags = flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv() // Разрешаем фокус для клавиатуры
+        }
+        windowManager.addView(mainOverlayView, params)
+    }
 
-        startForeground(NOTIFICATION_ID, notification)
+    private fun hideMainOverlay() {
+        mainOverlayView?.let {
+            if (it.isAttachedToWindow) windowManager.removeView(it)
+        }
+        mainOverlayView = null
+    }
+
+    // Реализация интерфейса от MainAppView
+    override fun onSendCommand(action: String, number: Int) {
+        val intent = Intent(this, OverlayService::class.java).apply {
+            this.action = action
+            if (number != -1) putExtra(AppConstants.EXTRA_NUMBER, number)
+        }
+        startService(intent)
+    }
+
+    override fun onSendCommandWithList(action: String, visibleList: ArrayList<Int>) {
+        val intent = Intent(this, OverlayService::class.java).apply {
+            this.action = action
+            putIntegerArrayListExtra(AppConstants.EXTRA_VISIBLE_LIST, visibleList)
+        }
+        startService(intent)
+    }
+
+    override fun onHideRequest() {
+        hideMainOverlay()
+    }
+
+    private fun handleShowSymbol(intent: Intent) {
+        val number = intent.getIntExtra(AppConstants.EXTRA_NUMBER, -1)
+        if (number != -1) uiHandler.post { showNumberOverlay(number) }
+    }
+
+    private fun handleDeleteSymbol(intent: Intent) {
+        val number = intent.getIntExtra(AppConstants.EXTRA_NUMBER, -1)
+        if (number != -1) uiHandler.post { deleteNumberOverlay(number) }
+    }
+
+    private fun handleSetVisibility(intent: Intent) {
+        val visibleList = intent.getIntegerArrayListExtra(AppConstants.EXTRA_VISIBLE_LIST)
+        visibleList?.let { uiHandler.post { setOverlaysVisibility(it) } }
+    }
+
+    @SuppressLint("InflateParams")
+    private fun showNumberOverlay(number: Int) {
+        if (overlays.containsKey(number)) return
+        val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
+        val symbolView = inflater.inflate(R.layout.overlay_symbol, null) as TextView
+        symbolView.text = "🔹"
+        val params = getLayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            x = 0; y = 50
+        }
+        symbolView.setOnTouchListener(MovableTouchListener(params, symbolView))
+        windowManager.addView(symbolView, params)
+        overlays[number] = symbolView
+    }
+
+    private fun deleteNumberOverlay(number: Int) {
+        overlays.remove(number)?.let { viewToRemove ->
+            if (viewToRemove.isAttachedToWindow) windowManager.removeView(viewToRemove)
+        }
+    }
+
+    private fun removeAllNumberOverlays() {
+        overlays.values.forEach { view -> if (view.isAttachedToWindow) windowManager.removeView(view) }
+        overlays.clear()
+    }
+
+    private fun freezeAllOverlays() {
+        overlays.values.forEach { view ->
+            view.setOnTouchListener(null)
+            val params = view.layoutParams as WindowManager.LayoutParams
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            if (view.isAttachedToWindow) {
+                windowManager.updateViewLayout(view, params)
+            }
+        }
+    }
+
+    private fun hideAllOverlays() {
+        overlays.values.forEach { it.visibility = View.GONE }
     }
 
     private fun setOverlaysVisibility(visibleNumbers: List<Int>) {
@@ -81,40 +166,33 @@ class OverlayService : Service() {
         }
     }
 
-    @SuppressLint("InflateParams")
-    private fun showOverlay(number: Int) {
-        if (overlays.containsKey(number)) return
-
-        val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        val symbolView = inflater.inflate(R.layout.overlay_symbol, null) as TextView
-        symbolView.text = "🔹"
-
+    private fun getLayoutParams(width: Int, height: Int): WindowManager.LayoutParams {
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         } else {
             @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_PHONE
         }
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            layoutFlag,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = 0; y = 50
-        }
-
-        symbolView.setOnTouchListener(MovableTouchListener(params, symbolView))
-        windowManager.addView(symbolView, params)
-        overlays[number] = symbolView
+        return WindowManager.LayoutParams(width, height, layoutFlag, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
     }
 
-    private inner class MovableTouchListener(private val params: WindowManager.LayoutParams, private val view: View) : View.OnTouchListener {
+    override fun onDestroy() {
+        super.onDestroy()
+        hideMainOverlay()
+        floatingButtonView?.let { if (it.isAttachedToWindow) windowManager.removeView(it) }
+        removeAllNumberOverlays()
+        stopForeground(true)
+    }
+
+    // --- ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ И ФУНКЦИИ (ПОЛНАЯ РЕАЛИЗАЦИЯ) ---
+    private inner class MovableTouchListener(
+        private val params: WindowManager.LayoutParams,
+        private val view: View,
+        private val onClick: (() -> Unit)? = null
+    ) : View.OnTouchListener {
         private var initialX = 0; private var initialY = 0
         private var initialTouchX = 0f; private var initialTouchY = 0f
+        private val clickThreshold = 10
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouch(v: View, event: MotionEvent): Boolean {
@@ -122,6 +200,14 @@ class OverlayService : Service() {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = params.x; initialY = params.y
                     initialTouchX = event.rawX; initialTouchY = event.rawY
+                    return true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val xDiff = (event.rawX - initialTouchX)
+                    val yDiff = (event.rawY - initialTouchY)
+                    if (Math.abs(xDiff) < clickThreshold && Math.abs(yDiff) < clickThreshold) {
+                        onClick?.invoke()
+                    }
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -135,42 +221,22 @@ class OverlayService : Service() {
         }
     }
 
-    // НОВАЯ ФУНКЦИЯ ДЛЯ ЗАМОРОЗКИ
-    private fun freezeAllOverlays() {
-        overlays.values.forEach { view ->
-            view.setOnTouchListener(null) // Убираем возможность двигать
-            val params = view.layoutParams as WindowManager.LayoutParams
-            // Добавляем флаг, чтобы нажатия проходили "сквозь" символ
-            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-            if (view.isAttachedToWindow) {
-                windowManager.updateViewLayout(view, params)
-            }
+    private fun startAsForegroundService() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, "AppSuper Service", NotificationManager.IMPORTANCE_LOW)
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
         }
+        val notification: Notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("AppSuper Активен")
+            .setContentText("Нажмите на плавающую кнопку для доступа.")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .build()
+        startForeground(NOTIFICATION_ID, notification)
     }
 
-    private fun deleteOverlay(number: Int) {
-        overlays.remove(number)?.let { viewToRemove ->
-            if (viewToRemove.isAttachedToWindow) windowManager.removeView(viewToRemove)
-        }
+    private fun toast(message: String) {
+        uiHandler.post { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
     }
-
-    private fun removeAllOverlays() {
-        overlays.values.forEach { view -> if (view.isAttachedToWindow) windowManager.removeView(view) }
-        overlays.clear()
-    }
-
-    private fun hideAllOverlays() {
-        overlays.values.forEach { it.visibility = View.GONE }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        uiHandler.post { removeAllOverlays() }
-        stopForeground(true)
-        Log.d("OverlayService", "Служба уничтожена.")
-    }
-
-
 
     override fun onBind(intent: Intent?): IBinder? = null
 }

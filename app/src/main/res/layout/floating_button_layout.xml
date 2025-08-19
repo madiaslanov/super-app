@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <ImageView
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/keypad_button_background"
+        android:src="@android:drawable/ic_menu_slideshow"
+        android:padding="4dp"
+        android:contentDescription="Open App"
+        android:tint="@android:color/white"/>
+
+</FrameLayout>
