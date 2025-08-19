@@ -1,6 +1,8 @@
 package com.example.appsuper
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -36,8 +38,23 @@ class MainActivity : AppCompatActivity() {
     private var lastInputWasInRed: Boolean? = null
     private var movesMadeAfterStart = 0
 
+
+    // --- НОВЫЙ КОД: Лаунчер для запроса разрешения на уведомления (для Android 13+) ---
+    private val notificationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            // Если разрешение на уведомления получено, продолжаем с разрешением на оверлей
+            checkOverlayPermissionAndStart()
+        } else {
+            // Без этого разрешения сервис не сможет работать корректно
+            toast("Приложение не может работать без разрешения на отправку уведомлений.")
+            finish()
+        }
+    }
+
     private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (canDrawOverlays()) startOverlayService()
+        if (canDrawOverlays()) {
+            startOverlayService()
+        }
         else {
             toast("Приложение не может работать без разрешения на отображение поверх других окон.")
             finish()
@@ -48,11 +65,31 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         setupMainUI()
-        checkOverlayPermissionAndStart()
+        // --- ИЗМЕНЕНО: Запускаем новую цепочку запроса разрешений ---
+        requestPermissionsAndStart()
+    }
+
+    // --- НОВЫЙ КОД: Функция-координатор для запроса разрешений ---
+    private fun requestPermissionsAndStart() {
+        // Для Android 13 (TIRAMISU) и выше, сначала нужно запросить разрешение на уведомления
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                // Разрешение уже есть, переходим к проверке оверлея
+                checkOverlayPermissionAndStart()
+            } else {
+                // Запрашиваем разрешение
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } else {
+            // На старых версиях Android это разрешение не требуется
+            checkOverlayPermissionAndStart()
+        }
     }
 
     private fun checkOverlayPermissionAndStart() {
-        if (canDrawOverlays()) startOverlayService()
+        if (canDrawOverlays()) {
+            startOverlayService()
+        }
         else {
             toast("Пожалуйста, предоставьте разрешение на отображение поверх других окон.")
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
@@ -149,7 +186,6 @@ class MainActivity : AppCompatActivity() {
         else handleGamePlay(number)
     }
 
-    // ИЗМЕНЕНИЕ ЗДЕСЬ: Полностью переписана логика добавления
     private fun handleInitialFill(number: Int) {
         if (red.contains(number) || green.contains(number)) {
             toast("Число $number уже введено!")
@@ -161,18 +197,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Шаг 1: Новое число ВСЕГДА добавляется в начало красной линии.
         red.add(0, number)
 
-        // Шаг 2: Если красная линия переполнилась, перемещаем последнее число в зеленую.
         if (red.size > RED_LINE_CAPACITY) {
-            val numberToMove = red.removeAt(red.lastIndex) // Берем последнее число из красной
+            val numberToMove = red.removeAt(red.lastIndex)
             if (green.size < GREEN_LINE_CAPACITY) {
-                green.add(0, numberToMove) // Добавляем его в начало зеленой
+                green.add(0, numberToMove)
             }
         }
 
-        // Остальная логика остается прежней
         sendCommandToService(AppConstants.ACTION_SHOW_SYMBOL, number)
 
         if (red.size + green.size == TOTAL_NUMBERS) {
@@ -191,26 +224,9 @@ class MainActivity : AppCompatActivity() {
     private fun handleDeleteClick(number: Int) {
         if (isGameStarted) return
 
-        // Сначала пытаемся удалить из зеленой линии
-        if (green.remove(number)) {
-            // Если удалили из зеленой, нужно "вернуть" число из красной
-            if (red.isNotEmpty()) {
-                green.add(red.removeAt(0))
-            }
-        } else {
-            // Если в зеленой не было, удаляем из красной
-            red.remove(number)
-        }
-
-        // Эта логика удаления была сложной и могла нарушить порядок,
-        // давайте упростим до простого удаления с перерисовкой.
-        // Простое удаление:
         val wasRemoved = red.remove(number) || green.remove(number)
 
-        // При простом удалении может нарушиться правило 19/18.
-        // Поэтому нужна перебалансировка.
         if (wasRemoved) {
-            // Перебалансировка: если в красной линии не хватает, а в зеленой есть, переносим
             while(red.size < RED_LINE_CAPACITY && green.isNotEmpty()) {
                 red.add(green.removeAt(0))
             }
