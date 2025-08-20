@@ -1,7 +1,6 @@
 package com.example.appsuper
 
 import android.content.Context
-import android.content.Intent
 import android.graphics.Color
 import android.util.AttributeSet
 import android.util.TypedValue
@@ -24,14 +23,14 @@ class MainAppView @JvmOverloads constructor(
 
     // --- UI ---
     private val statusText: TextView
+    private val counterText: TextView // НОВЫЙ ЭЛЕМЕНТ: Счетчик
     private val combinedLineLayout: LinearLayout
     private val keypadContainer: FrameLayout
     private val inputDisplay: TextView
     private val lineScrollView: HorizontalScrollView
-    private val showLinesCheckbox: CheckBox
     private val toggleKeyboardButton: Button
     private val freezeButton: Button
-    private val hideButton: ImageButton
+    // hideButton и showLinesCheckbox УДАЛЕНЫ
 
     // Локальное состояние ввода, не синхронизируется
     private val currentInput = StringBuilder()
@@ -39,14 +38,14 @@ class MainAppView @JvmOverloads constructor(
     init {
         LayoutInflater.from(context).inflate(R.layout.view_main_app, this, true)
         statusText = findViewById(R.id.statusText)
+        counterText = findViewById(R.id.counter_text) // ИНИЦИАЛИЗАЦИЯ СЧЕТЧИКА
         combinedLineLayout = findViewById(R.id.combinedLine)
         keypadContainer = findViewById(R.id.keypad_container)
         inputDisplay = findViewById(R.id.input_display)
         lineScrollView = findViewById(R.id.line_scrollview)
-        showLinesCheckbox = findViewById(R.id.line_toggle)
         toggleKeyboardButton = findViewById(R.id.toggle_keyboard_button)
         freezeButton = findViewById(R.id.freeze_button)
-        hideButton = findViewById(R.id.hide_button)
+        // Инициализация удаленных элементов убрана
 
         setupMainUI()
     }
@@ -82,15 +81,13 @@ class MainAppView @JvmOverloads constructor(
     }
 
     private fun setupMainUI() {
-        showLinesCheckbox.setOnCheckedChangeListener { _, isChecked -> lineScrollView.visibility = if (isChecked) View.VISIBLE else View.GONE }
+        // Логика для showLinesCheckbox УДАЛЕНА
 
         toggleKeyboardButton.setOnClickListener {
             if (keypadContainer.visibility == View.VISIBLE) {
                 keypadContainer.visibility = View.GONE
             } else {
                 keypadContainer.visibility = View.VISIBLE
-                lineScrollView.visibility = View.VISIBLE
-                showLinesCheckbox.isChecked = true
             }
         }
 
@@ -100,13 +97,13 @@ class MainAppView @JvmOverloads constructor(
             toast("Символы заморожены и скрыты")
         }
 
-        hideButton.setOnClickListener { listener?.onHideRequest() }
+        // Логика для hideButton УДАЛЕНА
 
         createPhoneKeypad()
 
+        // Клавиатура и линия теперь всегда видимы по умолчанию
         keypadContainer.visibility = View.VISIBLE
         lineScrollView.visibility = View.VISIBLE
-        showLinesCheckbox.isChecked = true
     }
 
     private fun createPhoneKeypad() {
@@ -155,7 +152,7 @@ class MainAppView @JvmOverloads constructor(
             }
             currentInput.clear()
             inputDisplay.text = ""
-            keypadContainer.visibility = View.GONE
+            // keypadContainer.visibility = View.GONE // ЭТА СТРОКА УДАЛЕНА, чтобы клавиатура не скрывалась
         }
     }
 
@@ -239,7 +236,7 @@ class MainAppView @JvmOverloads constructor(
     private fun updateAllUI() {
         // Обновляем текст статуса
         if (AppState.isGameStarted) {
-            statusText.text = "Start"
+            statusText.text = "Началось" // Изменено на "Началось" для соответствия скриншоту
         } else {
             val remaining = AppState.TOTAL_NUMBERS - (AppState.red.size + AppState.green.size)
             if (remaining == AppState.TOTAL_NUMBERS) {
@@ -270,6 +267,12 @@ class MainAppView @JvmOverloads constructor(
         val greenColor = ContextCompat.getColor(context, R.color.green_line_color)
         val addNumberViews = { list: List<Int>, color: Int -> list.forEach { num -> combinedLineLayout.addView(createNumberView(num, color)) } }
         if (AppState.isGameStarted) {
+            // --- НОВАЯ ЛОГИКА ДЛЯ СЧЕТЧИКА ---
+            val remainingCount = (AppState.red.size + AppState.green.size) - AppState.movesMadeAfterStart
+            counterText.text = remainingCount.toString()
+            counterText.visibility = View.VISIBLE
+            // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
             val barrier = TextView(context).apply {
                 text = "|"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
                 setTextColor(ContextCompat.getColor(context, android.R.color.white))
@@ -290,6 +293,9 @@ class MainAppView @JvmOverloads constructor(
                 addNumberViews(AppState.red, redColor); addNumberViews(AppState.green, greenColor)
             }
         } else {
+            // --- НОВАЯ ЛОГИКА ДЛЯ СЧЕТЧИКА ---
+            counterText.visibility = View.GONE // Скрываем счетчик, если игра не началась
+            // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
             addNumberViews(AppState.red, redColor); addNumberViews(AppState.green, greenColor)
         }
         lineScrollView.post { lineScrollView.fullScroll(HorizontalScrollView.FOCUS_LEFT) }
