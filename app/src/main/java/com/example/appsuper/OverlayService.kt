@@ -100,7 +100,6 @@ class OverlayService : Service(), MainAppView.AppViewListener {
         mainOverlayView = null
     }
 
-    // --- Остальные методы (onSendCommand, handleShowSymbol, etc.) без изменений ---
     override fun onSendCommand(action: String, number: Int) {
         val intent = Intent(this, OverlayService::class.java).apply {
             this.action = action
@@ -253,7 +252,6 @@ class OverlayService : Service(), MainAppView.AppViewListener {
                     if (!isDragging) {
                         onClick.invoke()
                     }
-                    // ИЗМЕНЕНИЕ: Используем post, чтобы анимация запустилась после всех UI-операций
                     view.post { animateToPeekingState() }
                     return true
                 }
@@ -273,7 +271,6 @@ class OverlayService : Service(), MainAppView.AppViewListener {
                         try {
                             windowManager.updateViewLayout(view, params)
                         } catch (e: IllegalArgumentException) {
-                            // View might be detached during animation, ignore.
                             currentAnimator?.cancel()
                         }
                     }
@@ -307,7 +304,6 @@ class OverlayService : Service(), MainAppView.AppViewListener {
         private val view: View,
         private val onClick: (() -> Unit)? = null
     ) : View.OnTouchListener {
-        // ... (этот класс без изменений)
         private var initialX = 0; private var initialY = 0
         private var initialTouchX = 0f; private var initialTouchY = 0f
         private val clickThreshold = 10
@@ -340,7 +336,6 @@ class OverlayService : Service(), MainAppView.AppViewListener {
     }
 
     private fun startAsForegroundService() {
-        // ... (этот метод без изменений)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, "AppSuper Service", NotificationManager.IMPORTANCE_LOW)
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)

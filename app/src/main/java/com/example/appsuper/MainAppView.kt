@@ -21,50 +21,43 @@ class MainAppView @JvmOverloads constructor(
 
     private var listener: AppViewListener? = null
 
-    // --- UI ---
+
     private val statusText: TextView
-    private val counterText: TextView // НОВЫЙ ЭЛЕМЕНТ: Счетчик
+    private val counterText: TextView
     private val combinedLineLayout: LinearLayout
     private val keypadContainer: FrameLayout
     private val inputDisplay: TextView
     private val lineScrollView: HorizontalScrollView
     private val toggleKeyboardButton: Button
     private val freezeButton: Button
-    // hideButton и showLinesCheckbox УДАЛЕНЫ
 
-    // Локальное состояние ввода, не синхронизируется
     private val currentInput = StringBuilder()
 
     init {
         LayoutInflater.from(context).inflate(R.layout.view_main_app, this, true)
         statusText = findViewById(R.id.statusText)
-        counterText = findViewById(R.id.counter_text) // ИНИЦИАЛИЗАЦИЯ СЧЕТЧИКА
+        counterText = findViewById(R.id.counter_text)
         combinedLineLayout = findViewById(R.id.combinedLine)
         keypadContainer = findViewById(R.id.keypad_container)
         inputDisplay = findViewById(R.id.input_display)
         lineScrollView = findViewById(R.id.line_scrollview)
         toggleKeyboardButton = findViewById(R.id.toggle_keyboard_button)
         freezeButton = findViewById(R.id.freeze_button)
-        // Инициализация удаленных элементов убрана
 
         setupMainUI()
     }
 
-    // Подписываемся на обновления при появлении View
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         AppState.registerListener(this)
-        // Сразу обновляем UI, чтобы показать актуальное состояние
         onStateChanged()
     }
 
-    // Отписываемся, чтобы избежать утечек памяти
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         AppState.unregisterListener(this)
     }
 
-    // Этот метод вызывается, когда AppState сообщает об изменениях
     override fun onStateChanged() {
         updateAllUI()
     }
@@ -74,15 +67,11 @@ class MainAppView @JvmOverloads constructor(
     }
 
     fun setOverlayMode() {
-        // Убираем фон для режима оверлея
         this.setBackgroundColor(Color.TRANSPARENT)
-        // Фон линии делаем полупрозрачным
         lineScrollView.setBackgroundColor(Color.parseColor("#992C2C2E"))
     }
 
     private fun setupMainUI() {
-        // Логика для showLinesCheckbox УДАЛЕНА
-
         toggleKeyboardButton.setOnClickListener {
             if (keypadContainer.visibility == View.VISIBLE) {
                 keypadContainer.visibility = View.GONE
@@ -97,17 +86,12 @@ class MainAppView @JvmOverloads constructor(
             toast("Символы заморожены и скрыты")
         }
 
-        // Логика для hideButton УДАЛЕНА
-
         createPhoneKeypad()
-
-        // Клавиатура и линия теперь всегда видимы по умолчанию
         keypadContainer.visibility = View.VISIBLE
         lineScrollView.visibility = View.VISIBLE
     }
 
     private fun createPhoneKeypad() {
-        // ... (код этой функции не меняется)
         keypadContainer.removeAllViews()
         val keypadView = LayoutInflater.from(context).inflate(R.layout.keypad_layout, keypadContainer, false)
         val tableLayout = keypadView.findViewById<TableLayout>(R.id.keypad_table)
@@ -128,7 +112,6 @@ class MainAppView @JvmOverloads constructor(
     }
 
     private fun onKeypadClick(key: String) {
-        // ... (код этой функции не меняется)
         when (key) {
             "✔" -> sendCurrentInput()
             "⌫" -> if (currentInput.isNotEmpty()) {
@@ -152,11 +135,9 @@ class MainAppView @JvmOverloads constructor(
             }
             currentInput.clear()
             inputDisplay.text = ""
-            // keypadContainer.visibility = View.GONE // ЭТА СТРОКА УДАЛЕНА, чтобы клавиатура не скрывалась
         }
     }
 
-    // Все функции ниже теперь работают с данными из AppState
     private fun handleNumberInput(number: Int) {
         if (!AppState.isGameStarted) handleInitialFill(number) else handleGamePlay(number)
     }
@@ -183,7 +164,6 @@ class MainAppView @JvmOverloads constructor(
             AppState.movesMadeAfterStart = 0
             toast("Все числа введены. Начали!")
         }
-        // Оповещаем всех об изменении состояния
         AppState.notifyListeners()
     }
 
@@ -196,7 +176,15 @@ class MainAppView @JvmOverloads constructor(
             }
             listener?.onSendCommand(AppConstants.ACTION_DELETE_SYMBOL, number)
             toast("Число $number удалено")
-            // Оповещаем всех об изменении состояния
+            AppState.notifyListeners()
+        }
+    }
+
+
+    private fun handleRollbackClick() {
+        if (AppState.rollbackLastState()) {
+            listener?.onSendCommandWithList(AppConstants.ACTION_SET_VISIBILITY, ArrayList(AppState.visibleSymbols))
+
             AppState.notifyListeners()
         }
     }
@@ -208,6 +196,9 @@ class MainAppView @JvmOverloads constructor(
             toast("Ошибка: число $number не найдено.")
             return
         }
+
+        AppState.saveStateSnapshot()
+
         var isAlreadyPlayed = false
         if (isNumberInRed) {
             if (AppState.movesMadeAfterStart > 0 && AppState.red.indexOf(number) < AppState.movesMadeAfterStart) isAlreadyPlayed = true
@@ -226,17 +217,25 @@ class MainAppView @JvmOverloads constructor(
                 AppState.green.removeAt(AppState.green.lastIndex)
             }
         }
-        val numbersToShow = if (AppState.lastInputWasInRed == isNumberInRed) (if (isNumberInRed) AppState.red else AppState.green) else emptyList()
-        listener?.onSendCommandWithList(AppConstants.ACTION_SET_VISIBILITY, ArrayList(numbersToShow))
+
+        val numbersToShow = if (AppState.lastInputWasInRed == isNumberInRed) {
+            if (isNumberInRed) AppState.red else AppState.green
+        } else {
+            emptyList()
+        }
+
+        AppState.visibleSymbols.clear()
+        AppState.visibleSymbols.addAll(numbersToShow)
+
+        listener?.onSendCommandWithList(AppConstants.ACTION_SET_VISIBILITY, ArrayList(AppState.visibleSymbols))
+
         AppState.lastInputWasInRed = isNumberInRed
-        // Оповещаем всех об изменении состояния
         AppState.notifyListeners()
     }
 
     private fun updateAllUI() {
-        // Обновляем текст статуса
         if (AppState.isGameStarted) {
-            statusText.text = "Началось" // Изменено на "Началось" для соответствия скриншоту
+            statusText.text = "Началось"
         } else {
             val remaining = AppState.TOTAL_NUMBERS - (AppState.red.size + AppState.green.size)
             if (remaining == AppState.TOTAL_NUMBERS) {
@@ -248,8 +247,7 @@ class MainAppView @JvmOverloads constructor(
         updateCombinedLineUI()
     }
 
-    private fun createNumberView(number: Int, color: Int): TextView {
-        // ... (код этой функции не меняется)
+    private fun createNumberView(number: Int, color: Int, clickListener: ((Int) -> Unit)?): TextView {
         return TextView(context).apply {
             text = number.toString()
             setTextColor(color)
@@ -257,7 +255,9 @@ class MainAppView @JvmOverloads constructor(
             setPadding(12, 4, 12, 4)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(4, 0, 4, 0) }
-            setOnClickListener { handleDeleteClick(number) }
+            if (clickListener != null) {
+                setOnClickListener { clickListener.invoke(number) }
+            }
         }
     }
 
@@ -265,38 +265,41 @@ class MainAppView @JvmOverloads constructor(
         combinedLineLayout.removeAllViews()
         val redColor = ContextCompat.getColor(context, R.color.red_line_color)
         val greenColor = ContextCompat.getColor(context, R.color.green_line_color)
-        val addNumberViews = { list: List<Int>, color: Int -> list.forEach { num -> combinedLineLayout.addView(createNumberView(num, color)) } }
+
         if (AppState.isGameStarted) {
-            // --- НОВАЯ ЛОГИКА ДЛЯ СЧЕТЧИКА ---
             val remainingCount = (AppState.red.size + AppState.green.size) - AppState.movesMadeAfterStart
             counterText.text = remainingCount.toString()
             counterText.visibility = View.VISIBLE
-            // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
 
             val barrier = TextView(context).apply {
                 text = "|"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
                 setTextColor(ContextCompat.getColor(context, android.R.color.white))
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(8, 0, 8, 0) }
             }
+
+            val rollbackListener: (Int) -> Unit = { handleRollbackClick() }
+            val noOpListener: ((Int) -> Unit)? = null
+
             if (AppState.movesMadeAfterStart in 1..AppState.RED_LINE_CAPACITY) {
-                AppState.red.take(AppState.movesMadeAfterStart).forEach { combinedLineLayout.addView(createNumberView(it, redColor)) }
+                AppState.red.take(AppState.movesMadeAfterStart).forEach { combinedLineLayout.addView(createNumberView(it, redColor, rollbackListener)) }
                 combinedLineLayout.addView(barrier)
-                AppState.red.drop(AppState.movesMadeAfterStart).forEach { combinedLineLayout.addView(createNumberView(it, redColor)) }
-                addNumberViews(AppState.green, greenColor)
+                AppState.red.drop(AppState.movesMadeAfterStart).forEach { combinedLineLayout.addView(createNumberView(it, redColor, noOpListener)) }
+                AppState.green.forEach { combinedLineLayout.addView(createNumberView(it, greenColor, noOpListener)) }
             } else if (AppState.movesMadeAfterStart > AppState.RED_LINE_CAPACITY) {
-                addNumberViews(AppState.red, redColor)
+                AppState.red.forEach { combinedLineLayout.addView(createNumberView(it, redColor, rollbackListener)) }
                 val playedOnGreen = AppState.movesMadeAfterStart - AppState.RED_LINE_CAPACITY
-                AppState.green.take(playedOnGreen).forEach { combinedLineLayout.addView(createNumberView(it, greenColor)) }
+                AppState.green.take(playedOnGreen).forEach { combinedLineLayout.addView(createNumberView(it, greenColor, rollbackListener)) }
                 combinedLineLayout.addView(barrier)
-                AppState.green.drop(playedOnGreen).forEach { combinedLineLayout.addView(createNumberView(it, greenColor)) }
-            } else {
-                addNumberViews(AppState.red, redColor); addNumberViews(AppState.green, greenColor)
+                AppState.green.drop(playedOnGreen).forEach { combinedLineLayout.addView(createNumberView(it, greenColor, noOpListener)) }
+            } else { // movesMadeAfterStart == 0
+                AppState.red.forEach { combinedLineLayout.addView(createNumberView(it, redColor, noOpListener)) }
+                AppState.green.forEach { combinedLineLayout.addView(createNumberView(it, greenColor, noOpListener)) }
             }
         } else {
-            // --- НОВАЯ ЛОГИКА ДЛЯ СЧЕТЧИКА ---
-            counterText.visibility = View.GONE // Скрываем счетчик, если игра не началась
-            // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
-            addNumberViews(AppState.red, redColor); addNumberViews(AppState.green, greenColor)
+            counterText.visibility = View.GONE
+            val deleteListener: (Int) -> Unit = { handleDeleteClick(it) }
+            AppState.red.forEach { combinedLineLayout.addView(createNumberView(it, redColor, deleteListener)) }
+            AppState.green.forEach { combinedLineLayout.addView(createNumberView(it, greenColor, deleteListener)) }
         }
         lineScrollView.post { lineScrollView.fullScroll(HorizontalScrollView.FOCUS_LEFT) }
     }

@@ -37,7 +37,6 @@ class MainActivity : AppCompatActivity(), MainAppView.AppViewListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Создаем наш основной View и добавляем его в Activity
         val mainAppView = MainAppView(this)
         mainAppView.setListener(this)
         findViewById<FrameLayout>(R.id.root_container).addView(mainAppView)
@@ -93,7 +92,6 @@ class MainActivity : AppCompatActivity(), MainAppView.AppViewListener {
     }
 
     override fun onHideRequest() {
-        // В Activity эта кнопка ничего не делает, так как мы в основном приложении
     }
 
     private fun canDrawOverlays(): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true

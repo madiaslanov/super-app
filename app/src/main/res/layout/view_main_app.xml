@@ -7,7 +7,6 @@
     android:focusable="true"
     android:padding="8dp">
 
-    <!-- Верхняя панель с информацией и кнопками -->
     <RelativeLayout
         android:id="@+id/top_panel"
         android:layout_width="match_parent"
@@ -50,7 +49,6 @@
         </LinearLayout>
     </RelativeLayout>
 
-    <!-- Поле для отображения вводимого числа -->
     <TextView
         android:id="@+id/input_display"
         android:layout_width="match_parent"
@@ -64,49 +62,29 @@
         android:textSize="36sp"
         tools:text="12" />
 
-    <!-- ИЗМЕНЕНИЕ: Контейнер теперь не нужен, линия позиционируется самостоятельно -->
-    <!-- RelativeLayout для позиционирования счетчика над линией -->
+    <FrameLayout
+        android:id="@+id/keypad_container"
+        android:layout_width="250dp"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:padding="8dp" />
 
-
-    <!-- ИЗМЕНЕНИЕ: Клавиатура теперь является прямым потомком RelativeLayout и привязана к правому нижнему углу -->
-
-    <RelativeLayout
-        android:id="@+id/line_container"
+    <LinearLayout
+        android:id="@+id/line_and_counter_container"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
         android:layout_alignParentBottom="true"
-        android:layout_gravity="center_vertical"
-        android:layout_marginStart="191dp"
-        android:layout_marginBottom="6dp">
+        android:layout_centerHorizontal="true"
+        android:orientation="vertical">
 
-        <!-- Линия с числами -->
-        <HorizontalScrollView
-            android:id="@+id/line_scrollview"
-            android:layout_width="100dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
-            android:background="@drawable/line_background_merged"
-            android:padding="4dp"
-            android:scrollbars="none">
-
-            <LinearLayout
-                android:id="@+id/combinedLine"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minHeight="40dp"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
-
-        <!-- Счетчик, расположенный справа СВЕРХУ линии -->
         <TextView
             android:id="@+id/counter_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_above="@id/line_scrollview"
-            android:layout_alignEnd="@id/line_scrollview"
+            android:layout_gravity="end"
             android:layout_marginEnd="5dp"
-            android:layout_marginBottom="7dp"
+            android:layout_marginBottom="4dp"
             android:background="@drawable/keypad_button_background"
             android:paddingStart="8dp"
             android:paddingTop="2dp"
@@ -119,14 +97,23 @@
             tools:text="37"
             tools:visibility="visible" />
 
-    </RelativeLayout>
 
-    <FrameLayout
-        android:id="@+id/keypad_container"
-        android:layout_width="250dp"
-        android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentBottom="true"
-        android:padding="8dp" />
+        <HorizontalScrollView
+            android:id="@+id/line_scrollview"
+            android:layout_width="100dp"
+            android:layout_height="wrap_content"
+            android:background="@drawable/line_background_merged"
+            android:padding="4dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/combinedLine"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:minHeight="40dp"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
 
 </RelativeLayout>

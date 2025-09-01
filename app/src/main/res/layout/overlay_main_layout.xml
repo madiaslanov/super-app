@@ -8,7 +8,6 @@
     android:focusable="true"
     android:padding="8dp">
 
-    <!-- Основной контент (линии, статус) слева -->
     <LinearLayout
         android:id="@+id/main_content"
         android:layout_width="match_parent"
@@ -17,7 +16,6 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Верхняя панель: Статус и кнопки -->
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">

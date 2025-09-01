@@ -2,14 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Разрешение для оверлеев -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- Разрешение, чтобы служба могла работать в фоне постоянно -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- Для Android 13+ требуется разрешение на показ уведомлений -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
-    <!-- ДОБАВЛЕНО: Разрешение для службы синхронизации данных (требуется для Android 14+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 
 
